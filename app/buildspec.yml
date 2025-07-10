@@ -31,9 +31,10 @@ phases:
   build:
     commands:
       - echo "Building the Docker image..."
-      # Build the Docker image from the Dockerfile in the current directory (app/)
+      # Build the Docker image from the Dockerfile in the 'app' directory
+      # The '.' at the end specifies the build context (where to find the source files)
       # The IMAGE_TAG will be 'latest' or a unique identifier (e.g., commit hash)
-      - docker build -t $ECR_REPOSITORY_URI:$IMAGE_TAG .
+      - docker build -t $ECR_REPOSITORY_URI:$IMAGE_TAG ./app
       - docker tag $ECR_REPOSITORY_URI:$IMAGE_TAG $ECR_REPOSITORY_URI:latest # Also tag as latest
 
   post_build:
