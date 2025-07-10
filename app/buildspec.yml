@@ -1,0 +1,51 @@
+# app/buildspec.yml
+version: 0.2
+
+# Define environment variables for the build process
+env:
+  variables:
+    # These variables will be passed from CodePipeline/CodeBuild
+    # ECR_REPOSITORY_URI: Populated by Terraform output
+    # IMAGE_TAG: Will be 'latest' or a commit hash from CodePipeline
+
+# Phases of the build process
+phases:
+  install:
+    commands:
+      # Install Docker and AWS CLI (if not already available in the CodeBuild image)
+      # The standard CodeBuild images usually have these pre-installed.
+      - echo "Installing dependencies..."
+      # For standard CodeBuild images, Docker and AWS CLI are usually pre-installed.
+      # If you use a custom image or a very minimal one, you might need:
+      # - apt-get update -y && apt-get install -y docker.io
+      # - pip install awscli --upgrade --user
+
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      # Login to ECR using AWS CLI
+      # ECR_REPOSITORY_URI is passed as an environment variable from CodePipeline
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+
+  build:
+    commands:
+      - echo "Building the Docker image..."
+      # Build the Docker image from the Dockerfile in the current directory (app/)
+      # The IMAGE_TAG will be 'latest' or a unique identifier (e.g., commit hash)
+      - docker build -t $ECR_REPOSITORY_URI:$IMAGE_TAG .
+      - docker tag $ECR_REPOSITORY_URI:$IMAGE_TAG $ECR_REPOSITORY_URI:latest # Also tag as latest
+
+  post_build:
+    commands:
+      - echo "Pushing the Docker image to ECR..."
+      # Push the Docker image to ECR
+      - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+      - docker push $ECR_REPOSITORY_URI:latest
+      - echo "Build complete. Image pushed to ECR."
+
+# Artifacts (optional, but useful for passing information between pipeline stages)
+# In our case, the image is pushed directly to ECR, so no build artifacts are needed.
+# However, if we wanted to pass the image URI or other metadata, we could define them here.
+# artifacts:
+#   files:
+#     - 'imageDetail.json' # Example: if you generated a file with image details
