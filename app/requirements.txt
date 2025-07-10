@@ -1,1 +1,2 @@
-boto3
+# app/requirements.txt
+boto3==1.34.0 # Updated to a more recent version
