@@ -4,9 +4,10 @@ version: 0.2
 # Define environment variables for the build process
 env:
   variables:
-    # These variables will be passed from CodePipeline/CodeBuild
-    # ECR_REPOSITORY_URI: Populated by Terraform output
-    # IMAGE_TAG: Will be 'latest' or a commit hash from CodePipeline
+    # ECR_REPOSITORY_URI and IMAGE_TAG will be populated by CodePipeline.
+    # They need to be declared here even if their values are empty initially.
+    ECR_REPOSITORY_URI: "" # Placeholder, will be overridden by CodePipeline
+    IMAGE_TAG: "latest"    # Default tag, will be overridden by CodePipeline or set to 'latest'
 
 # Phases of the build process
 phases:
