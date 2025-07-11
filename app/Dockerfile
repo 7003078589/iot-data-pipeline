@@ -1,22 +1,19 @@
-# Dockerfile
-# Use a lightweight official Python runtime as a parent image
-FROM python:3.9-slim-buster
+# Use an official Python runtime from Amazon ECR Public Gallery as a parent image
+# This avoids Docker Hub unauthenticated pull rate limits.
+FROM public.ecr.aws/docker/library/python:3.9-slim-buster
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container at /app
-COPY requirements.txt .
-
 # Install any needed packages specified in requirements.txt
+# Copy requirements.txt first to leverage Docker cache
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code into the container at /app
+# Copy the rest of the application code into the container
 COPY . .
 
-# Entrypoint for the application.
-# The actual S3 input/output keys will be passed as environment variables
-# when the Fargate task runs.
-ENTRYPOINT ["python", "app.py"]
-
-# Expose the port the app runs on (if applicable) 
+# Command to run the application
+# The script will be executed when the ECS task starts.
+# It expects environment variables to be passed at runtime (e.g., from Lambda).
+CMD ["python", "app.py"]
