@@ -58,7 +58,12 @@ def process_s3_data(input_bucket, input_key, output_bucket, output_key):
 
         # Write processed data to S3
         logging.info(f"Writing processed data to s3://{output_bucket}/{output_key}")
-        s3_client.put_object(Bucket=output_bucket, Key=output_content.encode('utf-8')) # Using Body=output_content.encode('utf-8')
+        # FIX: Correctly pass Key and Body parameters
+        s3_client.put_object(
+            Bucket=output_bucket,
+            Key=output_key,  # This must be the string path
+            Body=output_content.encode('utf-8') # This must be the actual content as bytes
+        )
         
         logging.info(f"Successfully processed {len(processed_records)} records from {input_key} and saved to {output_key}.")
 
