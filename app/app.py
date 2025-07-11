@@ -33,36 +33,50 @@ def process_s3_data(input_bucket, input_key, output_bucket, output_key):
         for line_bytes in lines:
             line = line_bytes.decode('utf-8').strip()
             if not line:
+                logging.debug("Skipping empty line.")
                 continue # Skip empty lines
             try:
+                logging.debug(f"Attempting to parse line: '{line}'")
                 record = json.loads(line)
                 
+                # IMPORTANT: Ensure the parsed 'record' is a dictionary before processing
+                if not isinstance(record, dict):
+                    logging.warning(f"Skipping non-dictionary record after JSON parsing: {record}")
+                    continue
+
                 # Add processed timestamp
                 record['processed_timestamp'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 
-                # Convert temperature if 'temp_celsius' exists
-                if 'temp_celsius' in record:
-                    record['temp_fahrenheit'] = celsius_to_fahrenheit(record['temp_celsius'])
+                # Convert temperature if 'temperature' exists
+                if 'temperature' in record:
+                    # Check if temperature is a valid number before conversion
+                    if isinstance(record['temperature'], (int, float)):
+                        logging.info(f"Found temperature: {record['temperature']} (Celsius)")
+                        record['temp_fahrenheit'] = celsius_to_fahrenheit(record['temperature'])
+                        logging.info(f"Converted to Fahrenheit: {record['temp_fahrenheit']}")
+                    else:
+                        logging.warning(f"Temperature value is not a number: {record['temperature']}. Skipping conversion.")
                 
                 processed_records.append(record)
-                logging.debug(f"Processed record: {record}")
+                logging.debug(f"Successfully processed and added record: {record}")
             except json.JSONDecodeError as e:
-                logging.error(f"Skipping malformed JSON line: {line} - Error: {e}")
+                logging.error(f"Skipping malformed JSON line: '{line}' - Error: {e}")
             except Exception as e:
-                logging.error(f"Error processing line: {line} - Error: {e}")
+                logging.error(f"Error processing line: '{line}' - Error: {e}")
 
         # Prepare data for writing to S3
         output_content = ""
+        if not processed_records:
+            logging.warning("No valid records were processed. Output file will be empty.")
         for record in processed_records:
             output_content += json.dumps(record) + '\n'
 
         # Write processed data to S3
         logging.info(f"Writing processed data to s3://{output_bucket}/{output_key}")
-        # FIX: Correctly pass Key and Body parameters
         s3_client.put_object(
             Bucket=output_bucket,
-            Key=output_key,  # This must be the string path
-            Body=output_content.encode('utf-8') # This must be the actual content as bytes
+            Key=output_key,
+            Body=output_content.encode('utf-8')
         )
         
         logging.info(f"Successfully processed {len(processed_records)} records from {input_key} and saved to {output_key}.")
@@ -75,17 +89,6 @@ def process_s3_data(input_bucket, input_key, output_bucket, output_key):
         sys.exit(1)
 
 if __name__ == "__main__":
-    # In a real Fargate task, these would be passed as environment variables
-    # or command-line arguments.
-    # For local testing, you can set them as dummy values or use actual S3 paths
-    # if you have AWS credentials configured locally.
-
-    # Example: Set these environment variables for local testing with real S3 buckets
-    # export INPUT_BUCKET="your-raw-data-bucket"
-    # export INPUT_KEY="raw/test_data.jsonl"
-    # export OUTPUT_BUCKET="your-processed-data-bucket"
-    # export OUTPUT_KEY="processed/output_data.jsonl"
-
     input_bucket = os.environ.get('INPUT_BUCKET')
     input_key = os.environ.get('INPUT_KEY')
     output_bucket = os.environ.get('OUTPUT_BUCKET')
@@ -93,15 +96,16 @@ if __name__ == "__main__":
 
     if not all([input_bucket, input_key, output_bucket, output_key]):
         logging.error("Missing required environment variables: INPUT_BUCKET, INPUT_KEY, OUTPUT_BUCKET, OUTPUT_KEY.")
-        logging.info("Proceeding with local dummy data processing for demonstration.")
+        logging.info("For local testing, ensure these are set or modify script to use dummy files.")
+        logging.info("Proceeding with local dummy file processing for demonstration.")
         
-        # Simulate input data
+        # Simulate input data (ensure this matches your expected S3 input format)
         dummy_input_data = [
-            {"device_id": "sensor-001", "temp_celsius": 25.5, "humidity": 60},
-            {"device_id": "sensor-002", "temp_celsius": 30.0, "humidity": 65},
-            {"device_id": "sensor-003", "temp_celsius": 20.1, "humidity": 55},
+            {"device_id": "sensor-001", "temperature": 25.5, "humidity": 60},
+            {"device_id": "sensor-002", "temperature": 30.0, "humidity": 65},
+            {"device_id": "sensor-003", "temperature": 20.1, "humidity": 55},
             "this is a bad line", # Malformed data to test error handling
-            {"device_id": "sensor-004", "humidity": 70} # Missing temp_celsius
+            {"device_id": "sensor-004", "humidity": 70} # Missing temperature
         ]
         local_input_file = "raw_sensor_data.jsonl"
         with open(local_input_file, 'w') as f:
@@ -113,16 +117,22 @@ if __name__ == "__main__":
 
         local_output_file = "processed_sensor_data.jsonl"
         
-        # A simplified local file processing function, not using S3 client
         def local_process_data(infile_path, outfile_path):
             processed_records = []
             with open(infile_path, 'r') as infile:
                 for line in infile:
                     try:
                         record = json.loads(line.strip())
+                        if not isinstance(record, dict):
+                            logging.warning(f"Skipping non-dictionary record in local processing: {record}")
+                            continue
+
                         record['processed_timestamp'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                        if 'temp_celsius' in record:
-                            record['temp_fahrenheit'] = celsius_to_fahrenheit(record['temp_celsius'])
+                        if 'temperature' in record:
+                            if isinstance(record['temperature'], (int, float)):
+                                record['temp_fahrenheit'] = celsius_to_fahrenheit(record['temperature'])
+                            else:
+                                logging.warning(f"Temperature value is not a number in local processing: {record['temperature']}. Skipping conversion.")
                         processed_records.append(record)
                     except json.JSONDecodeError:
                         logging.warning(f"Skipping malformed line in local processing: {line.strip()}")
@@ -137,3 +147,4 @@ if __name__ == "__main__":
     logging.info("Starting S3 data processing script...")
     process_s3_data(input_bucket, input_key, output_bucket, output_key)
     logging.info("S3 data processing script finished.")
+# This script is designed to be run in an AWS Lambda environment where it will process data from S3.
